@@ -26,3 +26,13 @@ jobs:
         env:
           TOTP_SECRET_KEY: ${{ secrets.TOTP_SECRET_KEY }}
         run: python b2b_alfamart_daily_store_sell_out.py
+        continue-on-error: true   # Keep running to upload artifacts even if script fails
+
+      - name: Upload debug artifacts on failure
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-files
+          path: |
+            error_screenshot.png
+            page_source.html
