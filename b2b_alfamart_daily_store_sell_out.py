@@ -5,6 +5,8 @@ TOTP_SECRET_KEY = os.environ.get("TOTP_SECRET_KEY", "YOUR_FALLBACK_KEY")
 
 import time
 import pyotp
+import pytz  # <-- ADDED for timezone
+from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
@@ -14,24 +16,24 @@ from selenium.webdriver.support.ui import Select
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 
-# ---------- AUTO DATE CALCULATION ----------
-from datetime import datetime, timedelta
+# ---------- AUTO DATE CALCULATION USING JAKARTA TIMEZONE ----------
+jakarta_tz = pytz.timezone('Asia/Jakarta')
+today = datetime.now(jakarta_tz)   # Now in Jakarta local time
 
-today = datetime.now()
 end_date = today - timedelta(days=2)
-start_date = datetime(today.year, today.month, 1)
+start_date = datetime(today.year, today.month, 1, tzinfo=jakarta_tz)
 
 # If end_date is before start_date (e.g., today is 1st or 2nd)
 if end_date < start_date:
     # Move start_date to 1st of previous month
     if today.month == 1:
-        start_date = datetime(today.year - 1, 12, 1)
+        start_date = datetime(today.year - 1, 12, 1, tzinfo=jakarta_tz)
     else:
-        start_date = datetime(today.year, today.month - 1, 1)
+        start_date = datetime(today.year, today.month - 1, 1, tzinfo=jakarta_tz)
 
 START_DATE = start_date.strftime("%d-%m-%Y")
 END_DATE   = end_date.strftime("%d-%m-%Y")
-print(f"Auto date range: {START_DATE} → {END_DATE}")
+print(f"Auto date range (Jakarta time): {START_DATE} → {END_DATE}")
 
 # ---------- START BROWSER ----------
 service = Service(ChromeDriverManager().install())
