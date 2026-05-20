@@ -38,7 +38,6 @@ options = webdriver.ChromeOptions()
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-gpu")
-# Headless mode is not needed because we need to interact with the page
 service = Service(ChromeDriverManager().install())
 driver = webdriver.Chrome(service=service, options=options)
 
@@ -72,14 +71,12 @@ try:
 
     # ---------- OPEN Dashboard & Modular (Laporan menu) ----------
     wait = WebDriverWait(driver, 20)
-    # Ensure the Laporan menu is present
     laporan_menu = wait.until(EC.presence_of_element_located((By.XPATH, "//a[contains(text(), 'Laporan')]")))
     actions = ActionChains(driver)
     actions.move_to_element(laporan_menu).perform()
     print("Hovered over Laporan menu.")
     time.sleep(2)
 
-    # Wait for Dashboard & Modular link to be clickable
     dashboard_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@href='get_laporan_new_premium.php']")))
     driver.execute_script("arguments[0].scrollIntoView(true);", dashboard_link)
     time.sleep(0.5)
@@ -102,12 +99,23 @@ try:
         raise Exception("New tab did not open!")
     driver.switch_to.window(new_tab)
     print("Switched to new tab.")
-    time.sleep(3)
+    
+    # ---------- WAIT FOR PAGE TO LOAD (look for a key element) ----------
+    # Wait for the "switch-dashboard" div or the "jenis_performace" dropdown
+    try:
+        wait = WebDriverWait(driver, 15)
+        wait.until(EC.presence_of_element_located((By.CLASS_NAME, "switch-dashboard")))
+        print("Page loaded (switch-dashboard found).")
+    except:
+        print("Warning: switch-dashboard not found, continuing anyway.")
+    
+    time.sleep(2)  # extra buffer
+    print(f"Current page title: {driver.title}")
+    print(f"Current URL: {driver.current_url}")
 
     # ---------- CLICK "Report Modular" ----------
-    # Wait for the switch buttons to load
-    wait = WebDriverWait(driver, 15)
-    modular_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@href='performancesales-modular']")))
+    # Look for the link by text (more reliable)
+    modular_link = wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Report Modular")))
     driver.execute_script("arguments[0].scrollIntoView(true);", modular_link)
     time.sleep(1)
     modular_link.click()
@@ -115,13 +123,12 @@ try:
     time.sleep(4)  # Allow the report type selector to load
 
     # ---------- SELECT "Performance by Item by Store by Day" ----------
-    # Wait for the jenis performance dropdown to be present
     wait = WebDriverWait(driver, 15)
     jenis_dropdown = wait.until(EC.presence_of_element_located((By.ID, "jenis_performace")))
     jenis_performance = Select(jenis_dropdown)
     jenis_performance.select_by_value("4")
     print("Selected 'Performance by Item by Store by Day'.")
-    time.sleep(3)  # Let the filter form change
+    time.sleep(3)
 
     # ---------- SET DATE RANGE ----------
     start_input = driver.find_element(By.ID, "periode_awal")
@@ -159,7 +166,6 @@ try:
         print(f"📂 Category: {cat_name}")
         print('='*60)
 
-        # Wait for category dropdown to be ready
         cat_dropdown = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, "category-filter-report-modular-3"))
         )
@@ -178,7 +184,6 @@ try:
             download_btn.click()
             print(f"   ⏳ Clicked download for {cat_name} | {unit_name}")
 
-            # Handle alert (success or rate limit)
             try:
                 time.sleep(1)
                 alert = driver.switch_to.alert
@@ -192,14 +197,17 @@ try:
         time.sleep(3)
 
     print("\n🎉 All done! Check your email for the reports.")
-    time.sleep(10)  # Give time for any final alerts
+    time.sleep(10)
 
 except Exception as e:
     print(f"An error occurred: {e}")
-    # Save a screenshot for debugging
     try:
         driver.save_screenshot("error_screenshot.png")
         print("Screenshot saved as error_screenshot.png")
+        # Also print page source for debugging
+        with open("page_source.html", "w") as f:
+            f.write(driver.page_source)
+        print("Page source saved as page_source.html")
     except:
         pass
     time.sleep(30)
