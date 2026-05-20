@@ -100,27 +100,32 @@ try:
     driver.switch_to.window(new_tab)
     print("Switched to new tab.")
     
-    # ---------- WAIT FOR PAGE TO LOAD (look for a key element) ----------
-    # Wait for the "switch-dashboard" div or the "jenis_performace" dropdown
-    try:
-        wait = WebDriverWait(driver, 15)
-        wait.until(EC.presence_of_element_located((By.CLASS_NAME, "switch-dashboard")))
-        print("Page loaded (switch-dashboard found).")
-    except:
-        print("Warning: switch-dashboard not found, continuing anyway.")
-    
-    time.sleep(2)  # extra buffer
+    # Wait for page to load
+    wait = WebDriverWait(driver, 15)
+    wait.until(EC.presence_of_element_located((By.CLASS_NAME, "switch-dashboard")))
+    print("Page loaded (switch-dashboard found).")
     print(f"Current page title: {driver.title}")
     print(f"Current URL: {driver.current_url}")
 
-    # ---------- CLICK "Report Modular" ----------
-    # Look for the link by text (more reliable)
-    modular_link = wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Report Modular")))
-    driver.execute_script("arguments[0].scrollIntoView(true);", modular_link)
-    time.sleep(1)
-    modular_link.click()
-    print("Clicked 'Report Modular'.")
-    time.sleep(4)  # Allow the report type selector to load
+    # ---------- CLICK "Report Modular" or navigate directly ----------
+    try:
+        modular_link = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.LINK_TEXT, "Report Modular"))
+        )
+        modular_link.click()
+        print("Clicked 'Report Modular' using link text.")
+    except:
+        try:
+            modular_link = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "a.gold-font[href='performancesales-modular']"))
+            )
+            modular_link.click()
+            print("Clicked 'Report Modular' using CSS selector.")
+        except:
+            print("Could not click link, navigating directly to performancesales-modular")
+            driver.get("https://b2b-np.alfamart.co.id/performancesales-modular")
+    
+    time.sleep(4)  # Allow page to load
 
     # ---------- SELECT "Performance by Item by Store by Day" ----------
     wait = WebDriverWait(driver, 15)
@@ -204,7 +209,6 @@ except Exception as e:
     try:
         driver.save_screenshot("error_screenshot.png")
         print("Screenshot saved as error_screenshot.png")
-        # Also print page source for debugging
         with open("page_source.html", "w") as f:
             f.write(driver.page_source)
         print("Page source saved as page_source.html")
