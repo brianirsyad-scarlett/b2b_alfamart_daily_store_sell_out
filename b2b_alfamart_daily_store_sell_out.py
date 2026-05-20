@@ -5,7 +5,7 @@ TOTP_SECRET_KEY = os.environ.get("TOTP_SECRET_KEY", "YOUR_FALLBACK_KEY")
 
 import time
 import pyotp
-import pytz  # <-- ADDED for timezone
+import pytz
 from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -16,16 +16,14 @@ from selenium.webdriver.support.ui import Select
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 
-# ---------- AUTO DATE CALCULATION USING JAKARTA TIMEZONE ----------
+# ---------- AUTO DATE CALCULATION (Jakarta Time) ----------
 jakarta_tz = pytz.timezone('Asia/Jakarta')
-today = datetime.now(jakarta_tz)   # Now in Jakarta local time
+today = datetime.now(jakarta_tz)
 
 end_date = today - timedelta(days=2)
 start_date = datetime(today.year, today.month, 1, tzinfo=jakarta_tz)
 
-# If end_date is before start_date (e.g., today is 1st or 2nd)
 if end_date < start_date:
-    # Move start_date to 1st of previous month
     if today.month == 1:
         start_date = datetime(today.year - 1, 12, 1, tzinfo=jakarta_tz)
     else:
@@ -36,8 +34,13 @@ END_DATE   = end_date.strftime("%d-%m-%Y")
 print(f"Auto date range (Jakarta time): {START_DATE} → {END_DATE}")
 
 # ---------- START BROWSER ----------
+options = webdriver.ChromeOptions()
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+options.add_argument("--disable-gpu")
+# Headless mode is not needed because we need to interact with the page
 service = Service(ChromeDriverManager().install())
-driver = webdriver.Chrome(service=service)
+driver = webdriver.Chrome(service=service, options=options)
 
 try:
     # ---------- LOGIN ----------
@@ -67,15 +70,19 @@ try:
         print("No popup.")
     time.sleep(3)
 
-    # ---------- OPEN Dashboard & Modular ----------
-    wait = WebDriverWait(driver, 15)
-    laporan_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//a[contains(text(), 'Laporan')]")))
+    # ---------- OPEN Dashboard & Modular (Laporan menu) ----------
+    wait = WebDriverWait(driver, 20)
+    # Ensure the Laporan menu is present
+    laporan_menu = wait.until(EC.presence_of_element_located((By.XPATH, "//a[contains(text(), 'Laporan')]")))
     actions = ActionChains(driver)
     actions.move_to_element(laporan_menu).perform()
     print("Hovered over Laporan menu.")
     time.sleep(2)
 
+    # Wait for Dashboard & Modular link to be clickable
     dashboard_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@href='get_laporan_new_premium.php']")))
+    driver.execute_script("arguments[0].scrollIntoView(true);", dashboard_link)
+    time.sleep(0.5)
     try:
         dashboard_link.click()
         print("Clicked Dashboard & Modular link.")
@@ -86,26 +93,37 @@ try:
     # ---------- SWITCH TO NEW TAB ----------
     time.sleep(3)
     original_tab = driver.current_window_handle
+    new_tab = None
     for tab in driver.window_handles:
         if tab != original_tab:
-            driver.switch_to.window(tab)
-            print("Switched to new tab.")
+            new_tab = tab
             break
-
-    # ---------- CLICK "Report Modular" ----------
-    wait = WebDriverWait(driver, 10)
-    modular_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@href='performancesales-modular']")))
-    modular_link.click()
-    print("Clicked 'Report Modular'.")
+    if new_tab is None:
+        raise Exception("New tab did not open!")
+    driver.switch_to.window(new_tab)
+    print("Switched to new tab.")
     time.sleep(3)
 
+    # ---------- CLICK "Report Modular" ----------
+    # Wait for the switch buttons to load
+    wait = WebDriverWait(driver, 15)
+    modular_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@href='performancesales-modular']")))
+    driver.execute_script("arguments[0].scrollIntoView(true);", modular_link)
+    time.sleep(1)
+    modular_link.click()
+    print("Clicked 'Report Modular'.")
+    time.sleep(4)  # Allow the report type selector to load
+
     # ---------- SELECT "Performance by Item by Store by Day" ----------
-    jenis_performance = Select(driver.find_element(By.ID, "jenis_performace"))
+    # Wait for the jenis performance dropdown to be present
+    wait = WebDriverWait(driver, 15)
+    jenis_dropdown = wait.until(EC.presence_of_element_located((By.ID, "jenis_performace")))
+    jenis_performance = Select(jenis_dropdown)
     jenis_performance.select_by_value("4")
     print("Selected 'Performance by Item by Store by Day'.")
-    time.sleep(2)
+    time.sleep(3)  # Let the filter form change
 
-    # ---------- SET DATE RANGE (dynamic) ----------
+    # ---------- SET DATE RANGE ----------
     start_input = driver.find_element(By.ID, "periode_awal")
     driver.execute_script("arguments[0].removeAttribute('readonly')", start_input)
     start_input.clear()
@@ -141,7 +159,11 @@ try:
         print(f"📂 Category: {cat_name}")
         print('='*60)
 
-        category_select = Select(driver.find_element(By.ID, "category-filter-report-modular-3"))
+        # Wait for category dropdown to be ready
+        cat_dropdown = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "category-filter-report-modular-3"))
+        )
+        category_select = Select(cat_dropdown)
         category_select.select_by_value(cat_value)
         print(f"Category set to: {cat_name}")
         time.sleep(1)
@@ -170,13 +192,16 @@ try:
         time.sleep(3)
 
     print("\n🎉 All done! Check your email for the reports.")
-
-    # Keep browser open for inspection (optional)
-    print("Browser will stay open for 2 minutes. You may close it manually.")
-    time.sleep(120)
+    time.sleep(10)  # Give time for any final alerts
 
 except Exception as e:
     print(f"An error occurred: {e}")
+    # Save a screenshot for debugging
+    try:
+        driver.save_screenshot("error_screenshot.png")
+        print("Screenshot saved as error_screenshot.png")
+    except:
+        pass
     time.sleep(30)
 
 finally:
